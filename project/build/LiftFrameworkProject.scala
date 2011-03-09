@@ -90,7 +90,7 @@ class LiftFrameworkProject(info: ProjectInfo) extends ParentProject(info) with L
   class FrameworkProject(info: ProjectInfo, libs: ModuleID*) extends DefaultProject(info) with LiftDefaultProject {
 
 //    override def libraryDependencies = super.libraryDependencies ++ libs
-    override def libraryDependencies = super.libraryDependencies ++ libs ++ Seq("org.specs2" %% "specs2" % "1.0.1" % "test")
+    override def libraryDependencies = super.libraryDependencies ++ libs ++ Seq("org.specs2" %% "specs2" % "1.1-SNAPSHOT" % "test")
 
     def specs2Framework = new TestFramework("org.specs2.runner.SpecsFramework")
 
