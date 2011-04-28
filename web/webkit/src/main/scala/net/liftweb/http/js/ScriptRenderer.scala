@@ -44,6 +44,7 @@ object ScriptRenderer {
 	  toSend.onSuccess = theSuccess;
 	  toSend.onFailure = theFailure;
 	  toSend.responseType = responseType;
+          toSend.guid = Math.floor(Math.random()*10000000).toString()+Math.floor(Math.random()*10000000).toString()+Math.floor(Math.random()*10000000).toString();
 
 	  liftAjax.lift_ajaxQueue.push(toSend);
 	  liftAjax.lift_ajaxQueueSort();
@@ -144,6 +145,9 @@ object ScriptRenderer {
                liftAjax.lift_doAjaxCycle();
              };
 
+             var oldGUID = currentGUID;
+             try {
+             currentGUID = aboutToSend.guid;
              if (aboutToSend.responseType != undefined &&
                  aboutToSend.responseType != null &&
                  aboutToSend.responseType.toLowerCase() === "json") {
@@ -156,6 +160,9 @@ object ScriptRenderer {
                }
                liftAjax.lift_actualAjaxCall(theData, successFunc, failureFunc);
              }
+             } finally {
+               liftAjax.currentGUID = oldGUID;
+             }
             }
          }
 
@@ -163,14 +170,17 @@ object ScriptRenderer {
          setTimeout("liftAjax.lift_doAjaxCycle();", 200);
        },
 
+       currentGUID: "",
+
+       calcGUID: function() {
+         if (liftAjax.currentGUID == "") return "na";
+         return liftAjax.currentGUID;
+       }
+
        addPageName: function(url) {
-         return """ + {
-    if (LiftRules.enableLiftGC) {
-      "url.replace('" + LiftRules.ajaxPath + "', '" + LiftRules.ajaxPath + "/'+lift_page);"
-    } else {
-      "url;"
-    }
-  } + """
+         return url + '/' + """+
+            (if (LiftRules.enableLiftGC) "lift_page" else "'na'")+
+          """ + '/' + liftAjax.calcGUID();
     },
 
     lift_actualAjaxCall: function(data, onSuccess, onFailure) {

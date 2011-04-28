@@ -230,6 +230,13 @@ private[http] trait LiftMerge {
 
         bodyChildren += JsCmds.Script((if (!cometList.isEmpty || hasFuncsForOwner(RenderVersion.get)) OnLoad(JsRaw("liftAjax.lift_successRegisterGC()")) else Noop) &
                 JsCrVar("lift_page", RenderVersion.get))
+      } else if (stateful_?) {
+        import js._
+        import JsCmds._
+        import JE._
+
+        // always include the lift_page 
+        bodyChildren += JsCrVar("lift_page", RenderVersion.get))
       }
 
       htmlKids += nl

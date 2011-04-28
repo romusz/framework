@@ -467,6 +467,13 @@ private final case class PostPageFunctions(renderVersion: String,
   
 }
 
+private final case class PageInfo(lastSeen: Long,
+                                  restore: Function1[Function0[_], _],
+                                  guid: String,
+                                  sync: Object,
+                                  respMap: Map[String, Box[LiftResponse]])
+                                  
+
 /**
  * The LiftSession class containg the session state information
  */
@@ -495,6 +502,9 @@ class LiftSession(private[http] val _contextPath: String, val uniqueId: String,
   private val fullPageLoad = new ThreadGlobal[Boolean] {
     def ? = this.box openOr false
   }
+
+  private var pages: Map[String, PageInfo] = Map()
+  private val pagesSyncObj = new Object()
 
   /**
    *  ****IMPORTANT**** when you access messageCallback, it *MUST*

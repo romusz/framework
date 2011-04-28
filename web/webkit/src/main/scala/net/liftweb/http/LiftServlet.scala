@@ -399,74 +399,85 @@ class LiftServlet extends Loggable {
       toReturn
     }
 
-  private def extractVersion(path: List[String]) {
+  private def extractVersion[T](liftSession: LiftSession,
+                                path: List[String])(f: => T): T = {
     path match {
-      case first :: second :: _ => RenderVersion.set(second)
-      case _ =>
+      case _ :: second :: guid :: _ if second != "na" &&
+      guid != "index" && guid.length > 0 => 
+        // recover page, lock page, set up requestvars
+        // de-dup GUID
+        RenderVersion.doWith(second)(f)
+      
+      case _ :: _ :: guid :: _ if guid.length > 0 && guid != "index" => 
+        // dedup GUID
+        f
+      
+      case _ => f
     }
   }
 
   private def handleAjax(liftSession: LiftSession,
                          requestState: Req): Box[LiftResponse] =
     {
-      extractVersion(requestState.path.partPath)
-
-      LiftRules.cometLogger.debug("AJAX Request: " + liftSession.uniqueId + " " + requestState.params)
-      tryo {LiftSession.onBeginServicing.foreach(_(liftSession, requestState))}
-
-      val ret = try {
-        requestState.param("__lift__GC") match {
-        case Full(_) =>
-          liftSession.updateFuncByOwner(RenderVersion.get, millis)
-          Full(JavaScriptResponse(js.JsCmds.Noop))
-
-        case _ =>
-          try {
-            val what = flatten(try {
-              liftSession.runParams(requestState)
-            } catch {
-              case ResponseShortcutException(_, Full(to), _) =>
-                import js.JsCmds._
-                List(RedirectTo(to))
-            })
-
-            val what2 = what.flatMap {
-              case js: JsCmd => List(js)
-              case n: NodeSeq => List(n)
-              case js: JsCommands => List(js)
-              case r: LiftResponse => List(r)
-              case s => Nil
+      extractVersion(liftSession, requestState.path.partPath){
+        LiftRules.cometLogger.debug("AJAX Request: " + liftSession.uniqueId + " " + requestState.params)
+        tryo {LiftSession.onBeginServicing.foreach(_(liftSession, requestState))}
+      
+        val ret = try {
+          requestState.param("__lift__GC") match {
+            case Full(_) => {
+              liftSession.updateFuncByOwner(RenderVersion.get, millis)
+              Full(JavaScriptResponse(js.JsCmds.Noop))
             }
-
-            val ret: LiftResponse = what2 match {
-              case (json: JsObj) :: Nil => JsonResponse(json)
-              case (js: JsCmd) :: xs => {
-                (JsCommands(S.noticesToJsCmd :: Nil) & 
-                 ((js :: xs).flatMap
-                  {case js: JsCmd => List(js)
-                   case _ => Nil}.reverse) &
-                 S.jsToAppend).toResponse
-              }
+            
+            case _ =>
+              try {
+                val what = flatten(try {
+                  liftSession.runParams(requestState)
+                } catch {
+                  case ResponseShortcutException(_, Full(to), _) =>
+                    import js.JsCmds._
+                  List(RedirectTo(to))
+                })
                 
-              case (n: Node) :: _ => XmlResponse(n)
-              case (ns: NodeSeq) :: _ => XmlResponse(Group(ns))
-              case (r: LiftResponse) :: _ => r
-              case _ => JsCommands(S.noticesToJsCmd :: JsCmds.Noop :: S.jsToAppend).toResponse
-            }
-
-            LiftRules.cometLogger.debug("AJAX Response: " + liftSession.uniqueId + " " + ret)
-
-            Full(ret)
-          } finally {
-            liftSession.updateFunctionMap(S.functionMap, RenderVersion.get, millis)
+                val what2 = what.flatMap {
+                  case js: JsCmd => List(js)
+                  case n: NodeSeq => List(n)
+                  case js: JsCommands => List(js)
+                  case r: LiftResponse => List(r)
+                  case s => Nil
+                }
+                
+                val ret: LiftResponse = what2 match {
+                  case (json: JsObj) :: Nil => JsonResponse(json)
+                  case (js: JsCmd) :: xs => {
+                    (JsCommands(S.noticesToJsCmd :: Nil) & 
+                     ((js :: xs).flatMap
+                      {case js: JsCmd => List(js)
+                       case _ => Nil}.reverse) &
+                     S.jsToAppend).toResponse
+                  }
+                  
+                  case (n: Node) :: _ => XmlResponse(n)
+                  case (ns: NodeSeq) :: _ => XmlResponse(Group(ns))
+                  case (r: LiftResponse) :: _ => r
+                  case _ => JsCommands(S.noticesToJsCmd :: JsCmds.Noop :: S.jsToAppend).toResponse
+                }
+                
+                LiftRules.cometLogger.debug("AJAX Response: " + liftSession.uniqueId + " " + ret)
+                
+                Full(ret)
+              } finally {
+                liftSession.updateFunctionMap(S.functionMap, RenderVersion.get, millis)
+              }
           }
+        } catch {
+          case foc: LiftFlowOfControlException => throw foc
+          case e => NamedPF.applyBox((Props.mode, requestState, e), LiftRules.exceptionHandler.toList);
         }
-      } catch {
-        case foc: LiftFlowOfControlException => throw foc
-        case e => NamedPF.applyBox((Props.mode, requestState, e), LiftRules.exceptionHandler.toList);
+        tryo {LiftSession.onEndServicing.foreach(_(liftSession, requestState, ret))}
+        ret
       }
-      tryo {LiftSession.onEndServicing.foreach(_(liftSession, requestState, ret))}
-      ret
     }
 
   /**
