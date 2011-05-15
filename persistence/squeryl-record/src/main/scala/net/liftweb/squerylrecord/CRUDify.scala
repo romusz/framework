@@ -25,52 +25,56 @@ import net.liftweb.record.Field
 import net.liftweb.common.{Box, Empty, Full}
 import scala.xml.NodeSeq
 
-trait CRUDify[K, T <: Record[T] with KeyedEntity[K]] extends Crudify{
-	self: MetaRecord[T] =>
-	
-    type TheCrudType = T
-	
-    type FieldPointerType = Field[_, TheCrudType]
-  
-    def table: Table[TheCrudType]
-	
-    def idFromString(in: String): K
+trait CRUDify[K, T <: Record[T] with KeyedEntity[K]] extends Crudify {
+  self: MetaRecord[T] =>
 
-    override def calcPrefix = table.name :: Nil
+  type TheCrudType = T
 
-    override def fieldsForDisplay = metaFields.filter(_.shouldDisplay_?)
+  type FieldPointerType = Field[_, TheCrudType]
 
-    override def computeFieldFromPointer(instance: TheCrudType, pointer: Field[_, TheCrudType]) = instance.fieldByName(pointer.name)
+  def table: Table[TheCrudType]
 
-    override def findForParam(in: String): Box[TheCrudType] = {
-      table.lookup(idFromString(in))
-     }
+  def idFromString(in: String): K
 
-    override def findForList(start: Long, count: Int) = from(table)(t => select(t)).page(start.toInt, count).toList
+  override def calcPrefix = table.name :: Nil
 
-    override def create = createRecord
+  override def fieldsForDisplay: List[FieldPointerType] = metaFields.filter(_.shouldDisplay_?)
 
-    override def buildBridge(in: TheCrudType) = new SquerylBridge(in)
+  override def computeFieldFromPointer(instance: TheCrudType, pointer: FieldPointerType): Box[FieldPointerType] = instance.fieldByName(pointer.name)
 
-    protected class SquerylBridge(in: TheCrudType) extends CrudBridge{
+  override def findForParam(in: String): Box[TheCrudType] = {
+    table.lookup(idFromString(in))
+  }
 
-      def delete_! = table.delete(in.id)
+  override def findForList(start: Long, count: Int) = from(table)(t => select(t)).page(start.toInt, count).toList
 
-       def save = {
-	 if(in.isPersisted){ table.update(in) }
-	 else{ table.insert(in) }
-	 true
-       }
+  override def create = createRecord
 
-       def validate = in.validate
+  override def buildBridge(in: TheCrudType) = new SquerylBridge(in)
 
-       def primaryKeyFieldAsString = in.id.toString
+  protected class SquerylBridge(in: TheCrudType) extends CrudBridge {
 
+    def delete_! = table.delete(in.id)
+
+    def save = {
+      if (in.isPersisted) {
+        table.update(in)
+      }
+      else {
+        table.insert(in)
+      }
+      true
     }
 
-    def buildFieldBridge(from: Field[_, TheCrudType]) = new SquerylFieldBridge(from)
+    def validate = in.validate
 
-    protected class SquerylFieldBridge(in: Field[_, TheCrudType]) extends FieldPointerBridge{
-      def displayHtml: NodeSeq = in.displayHtml
-    }
+    def primaryKeyFieldAsString = in.id.toString
+  }
+
+  def buildFieldBridge(from: FieldPointerType): FieldPointerBridge = new SquerylFieldBridge(from)
+
+  protected class SquerylFieldBridge(in: FieldPointerType) extends FieldPointerBridge {
+    def displayHtml: NodeSeq = in.displayHtml
+  }
+
 }
