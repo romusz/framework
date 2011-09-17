@@ -2201,18 +2201,22 @@ private class SelectorMap(binds: List[CssBind]) extends Function1[NodeSeq, NodeS
             }
             
             case n => {
-              calced.toList.zipWithIndex.flatMap {
-                case (Group(g), _) => g
-                case (e: Elem, 0) => 
-                  new Elem(e.prefix, 
-                           e.label, mergeAll(e.attributes, false),
-                           e.scope, e.child :_*)
-                case (e: Elem, _) =>
-                  new Elem(e.prefix, 
-                           e.label, mergeAll(e.attributes, true),
-                           e.scope, e.child :_*)
-                case (x, _) => 
-                  x
+              val calcedList = calced.toList
+              var availableIds = (attrs.get("id").toList ++
+                calcedList.collect({ case e:Elem => e.attribute("id") }).flatten.map(_.toString)).toSet
+              calcedList.flatMap {
+                case Group(g) => g
+                case e:Elem => {
+                  val targetId = e.attribute("id").map(_.toString) orElse (attrs.get("id"))
+                  val keepId = targetId map { id =>
+                    if (availableIds.contains(id)) {
+                      availableIds -= id
+                      true
+                    } else false
+                  } getOrElse (false)
+                  new Elem(e.prefix, e.label, mergeAll(e.attributes, ! keepId), e.scope, e.child: _*)
+                }
+                case x => x
               }
             }
           }
