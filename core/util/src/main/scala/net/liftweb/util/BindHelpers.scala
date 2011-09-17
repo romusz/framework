@@ -2202,22 +2202,23 @@ private class SelectorMap(binds: List[CssBind]) extends Function1[NodeSeq, NodeS
             
             case n => {
               val calcedList = calced.toList
-              var availableIds = (attrs.get("id").toList ++
+              val availableIds = (attrs.get("id").toList ++
                 calcedList.collect({ case e:Elem => e.attribute("id") }).flatten.map(_.toString)).toSet
-              calcedList.flatMap {
-                case Group(g) => g
-                case e:Elem => {
-                  val targetId = e.attribute("id").map(_.toString) orElse (attrs.get("id"))
-                  val keepId = targetId map { id =>
-                    if (availableIds.contains(id)) {
-                      availableIds -= id
-                      true
-                    } else false
-                  } getOrElse (false)
-                  new Elem(e.prefix, e.label, mergeAll(e.attributes, ! keepId), e.scope, e.child: _*)
+              val merged = calcedList.foldLeft((availableIds, Nil: List[Seq[xml.Node]])) { (idsAndResult, a) =>
+                val (ids, result) = idsAndResult
+                a match {
+                  case Group(g) => (ids, g :: result)
+                  case e:Elem => {
+                    val targetId = e.attribute("id").map(_.toString) orElse (attrs.get("id"))
+                    val keepId = targetId map { id => ids.contains(id) } getOrElse (false)
+                    val newIds = targetId filter (_ => keepId) map (i => ids - i) getOrElse (ids)
+                    val newElem = new Elem(e.prefix, e.label, mergeAll(e.attributes, ! keepId), e.scope, e.child: _*)
+                    (newIds, newElem :: result)
+                  }
+                  case x => (ids, x :: result)
                 }
-                case x => x
               }
+              merged._2.reverse.flatten
             }
           }
         }
